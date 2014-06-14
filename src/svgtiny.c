@@ -40,6 +40,14 @@ static svgtiny_code svgtiny_parse_line(dom_element *line,
 		struct svgtiny_parse_state state);
 static svgtiny_code svgtiny_parse_poly(dom_element *poly,
 		struct svgtiny_parse_state state, bool polygon);
+static svgtiny_code svgtiny_parse_defs(dom_element *defs,
+		struct svgtiny_parse_state state);
+static svgtiny_code svgtiny_parse_use(dom_element *use,
+		struct svgtiny_parse_state state);
+static svgtiny_code svgtiny_parse_filter(dom_element *filter,
+		struct svgtiny_parse_state state);
+static svgtiny_code svgtiny_parse_gradient(dom_element *gradient,
+		struct svgtiny_parse_state state);
 static svgtiny_code svgtiny_parse_text(dom_element *text,
 		struct svgtiny_parse_state state);
 static void svgtiny_parse_position_attributes(dom_element *node,
@@ -140,6 +148,7 @@ svgtiny_code svgtiny_parse(struct svgtiny_diagram *diagram,
 	dom_xml_parser *parser;
 	dom_xml_error err;
 	dom_element *svg;
+
 	dom_string *svg_name;
 	lwc_string *svg_name_lwc;
 	struct svgtiny_parse_state state;
@@ -366,6 +375,26 @@ svgtiny_code svgtiny_parse_svg(dom_element *svg,
 			else if (dom_string_caseless_isequal(state.interned_text,
 							     nodename))
 				code = svgtiny_parse_text(child, state);
+			else if (dom_string_caseless_isequal(state.interned_defs,
+							     nodename))
+				code = svgtiny_parse_defs(child, state);
+			else if (dom_string_caseless_isequal(state.interned_use,
+							     nodename))
+				code = svgtiny_parse_use(child, state);
+			else if (dom_string_caseless_isequal(state.interned_symbol,
+							     nodename))
+				code = svgtiny_parse_svg(child, state);
+			else if (dom_string_caseless_isequal(state.interned_filter,
+							     nodename))
+				code = svgtiny_parse_filter(child, state);
+			else if (dom_string_caseless_isequal(state.interned_linearGradient,
+							     nodename))
+				code = svgtiny_parse_gradient(child, state);
+            else {
+                char *s = strndup(dom_string_data(nodename),
+                          dom_string_byte_length(nodename));
+                printf(" %s", s);
+            }
 			dom_string_unref(nodename);
 		}
 		if (code != svgtiny_OK) {
@@ -1086,6 +1115,96 @@ svgtiny_code svgtiny_parse_poly(dom_element *poly,
 	return err;
 }
 
+/**
+ * Parse a <defs> element node.
+ */
+
+svgtiny_code svgtiny_parse_defs(dom_element *defs,
+		struct svgtiny_parse_state state)
+{
+	svgtiny_code code;
+
+/*
+    code = svgtiny_parse_svg(defs, state);
+
+    if (code != svgtiny_OK) {
+        return code;
+    }
+
+*/
+	return svgtiny_OK;
+}
+
+/**
+ * Parse a <use> element node.
+ *
+ *<use xlink:href="#glyph0-0" x="80" y="75.2287"/>
+ *
+ */
+
+svgtiny_code svgtiny_parse_use(dom_element *use,
+		struct svgtiny_parse_state state)
+{
+	dom_string *attr;
+	float x, y, width, height;
+	dom_exception exc;
+    char *s = 0;
+	dom_element *svg;
+	dom_string *svg_name;
+	lwc_string *svg_name_lwc;
+
+	svgtiny_parse_position_attributes(use, state,
+			&x, &y, &width, &height);
+
+	lwc_intern_string("svg", 3, &svg_name_lwc);
+    exc = dom_element_named_ancestor_node(use, svg_name_lwc, &svg);
+	exc = dom_node_get_node_name(svg, &svg_name);
+
+        s = strndup(dom_string_data(svg_name),
+                  dom_string_byte_length(svg_name));
+        printf("\nsvg: [%s]", s);
+        free(s);
+	lwc_string_unref(svg_name_lwc);
+	dom_string_unref(svg_name);
+
+	exc = dom_element_get_attribute_ns(use, dom_namespaces[DOM_NAMESPACE_XLINK], state.interned_href, &attr);
+
+	if (exc == DOM_NO_ERR && attr != NULL) {
+        s = strndup(dom_string_data(attr),
+                  dom_string_byte_length(attr));
+		dom_string_unref(attr);
+        printf("\nuse: [%s] (%f, %f)", s, x, y);
+        free(s);
+	} else {
+        printf("not found for use: e[%d] ?%d (%f, %f)", (int)exc, (attr == NULL), x, y);
+    }
+
+	dom_node_unref(svg);
+
+	return svgtiny_OK;
+}
+
+/**
+ * Parse a <filter> element node.
+ */
+
+svgtiny_code svgtiny_parse_filter(dom_element *filter,
+		struct svgtiny_parse_state state)
+{
+	return svgtiny_OK;
+}
+
+/**
+ * Parse a <gradient> element node.
+ *
+ * TODO: start with linearGradient
+ */
+
+svgtiny_code svgtiny_parse_gradient(dom_element *gradient,
+		struct svgtiny_parse_state state)
+{
+	return svgtiny_OK;
+}
 
 /**
  * Parse a <text> or <tspan> element node.
