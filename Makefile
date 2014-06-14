@@ -18,7 +18,7 @@ WARNFLAGS := -Wall -W -Wundef -Wpointer-arith -Wcast-align \
 # BeOS/Haiku/AmigaOS standard library headers create warnings
 ifneq ($(TARGET),beos)
   ifneq ($(TARGET),amiga)
-    WARNFLAGS := $(WARNFLAGS) -Werror
+    WARNFLAGS := $(WARNFLAGS) -Wno-error
   endif
 endif
 
@@ -49,3 +49,4 @@ I := /include
 INSTALL_ITEMS := $(INSTALL_ITEMS) $(I):include/svgtiny.h
 INSTALL_ITEMS := $(INSTALL_ITEMS) /$(LIBDIR)/pkgconfig:lib$(COMPONENT).pc.in
 INSTALL_ITEMS := $(INSTALL_ITEMS) /$(LIBDIR):$(OUTPUT)
+$(info $(WARNFLAGS) $(CFLAGS) $(LDFLAGS))
