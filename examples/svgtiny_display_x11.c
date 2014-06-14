@@ -23,6 +23,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -114,8 +115,8 @@ int main(int argc, char *argv[])
 		case svgtiny_OUT_OF_MEMORY:
 			fprintf(stderr, "svgtiny_OUT_OF_MEMORY");
 			break;
-		case svgtiny_LIBXML_ERROR:
-			fprintf(stderr, "svgtiny_LIBXML_ERROR");
+		case svgtiny_LIBDOM_ERROR:
+			fprintf(stderr, "svgtiny_LIBDOM_ERROR");
 			break;
 		case svgtiny_NOT_SVG:
 			fprintf(stderr, "svgtiny_NOT_SVG");
