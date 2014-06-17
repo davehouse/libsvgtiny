@@ -1143,6 +1143,7 @@ svgtiny_code svgtiny_parse_defs(dom_element *defs,
 svgtiny_code svgtiny_parse_use(dom_element *use,
 		struct svgtiny_parse_state state)
 {
+	dom_string *temp;
 	dom_string *attr;
 	float x, y, width, height;
 	dom_exception exc;
@@ -1155,6 +1156,16 @@ svgtiny_code svgtiny_parse_use(dom_element *use,
     state.ctm.e = state.ctm.e + x * state.ctm.a;
     state.ctm.f += y * state.ctm.d;
 
+	exc = dom_element_get_attribute_ns(use, dom_namespaces[DOM_NAMESPACE_XLINK], state.interned_href, &temp);
+	if (exc == DOM_NO_ERR && temp != NULL) {
+		exc = dom_string_substr(temp, 1, dom_string_byte_length(temp), &attr);
+		if (exc != DOM_NO_ERR || temp != NULL) {
+			printf("not a local href?\n");
+		}
+    } else {
+        printf("no href?\n");
+    }
+
 	if (exc == DOM_NO_ERR && attr != NULL) {
         s = strndup(dom_string_data(attr),
                   dom_string_byte_length(attr));
@@ -1166,6 +1177,7 @@ svgtiny_code svgtiny_parse_use(dom_element *use,
         fprintf(stderr, "not found for use: e[%d] ?%d (%f, %f)\n", (int)exc, (attr == NULL), x, y);
     }
 	dom_string_unref(attr);
+	dom_string_unref(temp);
 
 	return svgtiny_OK;
 }
@@ -1194,11 +1206,7 @@ svgtiny_code _svgtiny_find_and_use(dom_element *start,
 		svgtiny_code code = svgtiny_OK;
 
         exc = dom_element_has_attribute(child, state.interned_id, &has);
-		if (exc != DOM_NO_ERR) {
-			dom_node_unref(child);
-			return svgtiny_LIBDOM_ERROR;
-		}
-
+        exc = dom_node_get_node_name(child, &svg_name);
         if (has) {
             exc = dom_element_get_attribute(child, state.interned_id, &svg_name);
             if (exc != DOM_NO_ERR) {
