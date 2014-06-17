@@ -44,6 +44,9 @@ static svgtiny_code svgtiny_parse_defs(dom_element *defs,
 		struct svgtiny_parse_state state);
 static svgtiny_code svgtiny_parse_use(dom_element *use,
 		struct svgtiny_parse_state state);
+svgtiny_code _svgtiny_find_and_use(dom_element *start,
+		struct svgtiny_parse_state state, dom_string *attr,
+        bool *match);
 static svgtiny_code svgtiny_parse_filter(dom_element *filter,
 		struct svgtiny_parse_state state);
 static svgtiny_code svgtiny_parse_gradient(dom_element *gradient,
@@ -1115,6 +1118,7 @@ svgtiny_code svgtiny_parse_poly(dom_element *poly,
 	return err;
 }
 
+static dom_element *stored_defs;
 /**
  * Parse a <defs> element node.
  */
@@ -1124,14 +1128,8 @@ svgtiny_code svgtiny_parse_defs(dom_element *defs,
 {
 	svgtiny_code code;
 
-/*
-    code = svgtiny_parse_svg(defs, state);
+    stored_defs = defs;
 
-    if (code != svgtiny_OK) {
-        return code;
-    }
-
-*/
 	return svgtiny_OK;
 }
 
@@ -1149,37 +1147,125 @@ svgtiny_code svgtiny_parse_use(dom_element *use,
 	float x, y, width, height;
 	dom_exception exc;
     char *s = 0;
-	dom_element *svg;
-	dom_string *svg_name;
-	lwc_string *svg_name_lwc;
+	dom_element *id;
+	bool match = false;
 
 	svgtiny_parse_position_attributes(use, state,
 			&x, &y, &width, &height);
-
-	lwc_intern_string("svg", 3, &svg_name_lwc);
-    exc = dom_element_named_ancestor_node(use, svg_name_lwc, &svg);
-	exc = dom_node_get_node_name(svg, &svg_name);
-
-        s = strndup(dom_string_data(svg_name),
-                  dom_string_byte_length(svg_name));
-        printf("\nsvg: [%s]", s);
-        free(s);
-	lwc_string_unref(svg_name_lwc);
-	dom_string_unref(svg_name);
-
-	exc = dom_element_get_attribute_ns(use, dom_namespaces[DOM_NAMESPACE_XLINK], state.interned_href, &attr);
+    state.ctm.e = state.ctm.e + x * state.ctm.a;
+    state.ctm.f += y * state.ctm.d;
 
 	if (exc == DOM_NO_ERR && attr != NULL) {
         s = strndup(dom_string_data(attr),
                   dom_string_byte_length(attr));
-		dom_string_unref(attr);
-        printf("\nuse: [%s] (%f, %f)", s, x, y);
+        printf("\n\n\nuse: [%s] (%f, %f)", s, x, y);
         free(s);
-	} else {
-        printf("not found for use: e[%d] ?%d (%f, %f)", (int)exc, (attr == NULL), x, y);
-    }
 
-	dom_node_unref(svg);
+        _svgtiny_find_and_use(stored_defs, state, attr, &match);
+	} else {
+        fprintf(stderr, "not found for use: e[%d] ?%d (%f, %f)\n", (int)exc, (attr == NULL), x, y);
+    }
+	dom_string_unref(attr);
+
+	return svgtiny_OK;
+}
+
+svgtiny_code _svgtiny_find_and_use(dom_element *start,
+		struct svgtiny_parse_state state, dom_string *attr,
+        bool *match)
+{
+	dom_exception exc;
+    char *s = 0;
+	dom_element *child;
+	bool has;
+
+	dom_element *svg;
+	dom_string *svg_name;
+	lwc_string *svg_name_lwc;
+
+	exc = dom_node_get_first_child(start, (dom_node **) (void *) &child);
+	if (exc != DOM_NO_ERR) {
+		svgtiny_cleanup_state_local(&state);
+		return svgtiny_LIBDOM_ERROR;
+	}
+	while (child != NULL) {
+		dom_element *next;
+		dom_node_type nodetype;
+		svgtiny_code code = svgtiny_OK;
+
+        exc = dom_element_has_attribute(child, state.interned_id, &has);
+		if (exc != DOM_NO_ERR) {
+			dom_node_unref(child);
+			return svgtiny_LIBDOM_ERROR;
+		}
+
+        if (has) {
+            exc = dom_element_get_attribute(child, state.interned_id, &svg_name);
+            if (exc != DOM_NO_ERR) {
+                dom_node_unref(child);
+                return svgtiny_LIBDOM_ERROR;
+            }
+			if (dom_string_caseless_isequal(svg_name, attr)) {
+                *match = true;
+            }
+        }
+
+		exc = dom_node_get_node_type(child, &nodetype);
+		if (exc != DOM_NO_ERR) {
+			dom_node_unref(child);
+			return svgtiny_LIBDOM_ERROR;
+		}
+		if (nodetype == DOM_ELEMENT_NODE) {
+			dom_string *nodename;
+			exc = dom_node_get_node_name(child, &nodename);
+			if (exc != DOM_NO_ERR) {
+				dom_node_unref(child);
+				svgtiny_cleanup_state_local(&state);
+				return svgtiny_LIBDOM_ERROR;
+			}
+			if (dom_string_caseless_isequal(state.interned_g,
+							     nodename)) {
+                _svgtiny_find_and_use(child, state, attr, match);
+			} else if (*match) {
+                if (dom_string_caseless_isequal(state.interned_symbol,
+                                     nodename)) {
+                    code = svgtiny_parse_svg(child, state);
+                } else if (dom_string_caseless_isequal(state.interned_filter,
+                                     nodename)) {
+                    code = svgtiny_parse_filter(child, state);
+                } else if (dom_string_caseless_isequal(state.interned_linearGradient,
+                                     nodename)) {
+                    code = svgtiny_parse_gradient(child, state);
+                } else {
+                    char *s = strndup(dom_string_data(nodename),
+                              dom_string_byte_length(nodename));
+                    fprintf(stderr, "unused match! %s\n", s);
+                }
+            } else {
+                char *s = strndup(dom_string_data(nodename),
+                          dom_string_byte_length(nodename));
+                fprintf(stderr, " other defs? %s\n", s);
+            }
+			dom_string_unref(nodename);
+		}
+		if (code != svgtiny_OK) {
+			dom_node_unref(child);
+			svgtiny_cleanup_state_local(&state);
+			return code;
+		}
+        if (*match) {
+            next = NULL;
+        } else {
+            exc = dom_node_get_next_sibling(child,
+                            (dom_node **) (void *) &next);
+        }
+		dom_node_unref(child);
+		if (exc != DOM_NO_ERR) {
+			svgtiny_cleanup_state_local(&state);
+			return svgtiny_LIBDOM_ERROR;
+		}
+		child = next;
+	}
 
 	return svgtiny_OK;
 }
